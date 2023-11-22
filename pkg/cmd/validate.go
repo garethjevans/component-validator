@@ -3,6 +3,9 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"github.com/go-playground/locales/en"
+	ut "github.com/go-playground/universal-translator"
+	entranslations "github.com/go-playground/validator/v10/translations/en"
 	"os"
 	"regexp"
 
@@ -64,7 +67,10 @@ func Parse(source []byte) error {
 }
 
 func ValidateTask(u unstructured.Unstructured) error {
-	validate := validator.New()
+	validate, _, err := getValidator()
+	if err != nil {
+		return err
+	}
 
 	fields := &struct {
 		APIVersion string `json:"apiVersion" validate:"required,eq=tekton.dev/v1"`
@@ -74,21 +80,19 @@ func ValidateTask(u unstructured.Unstructured) error {
 		} `json:"metadata"`
 	}{}
 
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
 	if err != nil {
 		return err
-	}
-
-	err = validate.RegisterValidation("kebab-case", ValidateKebabCase)
-	if err != nil {
-		return fmt.Errorf(`failed to add custom validation for "{kebab-case}": %s`, err)
 	}
 
 	return validate.Struct(fields)
 }
 
 func ValidatePipeline(u unstructured.Unstructured) error {
-	validate := validator.New()
+	validate, _, err := getValidator()
+	if err != nil {
+		return err
+	}
 
 	fields := &struct {
 		APIVersion string `json:"apiVersion" validate:"required,eq=tekton.dev/v1"`
@@ -98,27 +102,26 @@ func ValidatePipeline(u unstructured.Unstructured) error {
 		} `json:"metadata"`
 	}{}
 
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
 	if err != nil {
 		return err
-	}
-
-	err = validate.RegisterValidation("kebab-case", ValidateKebabCase)
-	if err != nil {
-		return fmt.Errorf(`failed to add custom validation for "{kebab-case}": %s`, err)
 	}
 
 	return validate.Struct(fields)
 }
 
 func ValidateComponent(u unstructured.Unstructured) error {
-	validate := validator.New()
+	validate, translator, err := getValidator()
+	if err != nil {
+		return err
+	}
 
 	fields := &struct {
 		APIVersion string `json:"apiVersion" validate:"required,eq=supply-chain.apps.tanzu.vmware.com/v1alpha1"`
 		Kind       string `json:"kind" validate:"required,eq=Component"`
 		Metadata   struct {
-			Name string `json:"name" validate:"required,kebab-case,contains-semver"`
+			Name   string            `json:"name" validate:"required,kebab-case,contains-semver"`
+			Labels map[string]string `json:"labels" validate:"contains-catalog-label"`
 		} `json:"metadata"`
 		Spec struct {
 			Description string `json:"description" validate:"required"`
@@ -133,22 +136,74 @@ func ValidateComponent(u unstructured.Unstructured) error {
 		} `json:"spec" validate:"required"`
 	}{}
 
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
 	if err != nil {
 		return err
 	}
 
+	return translate(validate.Struct(fields), translator)
+}
+
+func translate(err error, translator ut.Translator) error {
+	if err != nil {
+
+		errs := err.(validator.ValidationErrors)
+
+		for _, e := range errs {
+			// can translate each error one at a time.
+			fmt.Println(e.Translate(translator))
+		}
+	}
+	return err
+}
+
+func getValidator() (*validator.Validate, ut.Translator, error) {
+	translator := en.New()
+	uni := ut.New(translator, translator)
+
+	trans, _ := uni.GetTranslator("en")
+	validate := validator.New(validator.WithRequiredStructEnabled())
+
+	err := entranslations.RegisterDefaultTranslations(validate, trans)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	err = validate.RegisterValidation("kebab-case", ValidateKebabCase)
 	if err != nil {
-		return fmt.Errorf(`failed to add custom validation for "{kebab-case}": %s`, err)
+		return nil, nil, fmt.Errorf(`failed to add custom validation for "{kebab-case}": %s`, err)
 	}
 
 	err = validate.RegisterValidation("contains-semver", ValidateContainsSemanticVersion)
 	if err != nil {
-		return fmt.Errorf(`failed to add custom validation for "{contains-semver}": %s`, err)
+		return nil, nil, fmt.Errorf(`failed to add custom validation for "{contains-semver}": %s`, err)
 	}
 
-	return validate.Struct(fields)
+	err = validate.RegisterValidation("contains-catalog-label", ValidateContainsCatalogLabel)
+	if err != nil {
+		return nil, nil, fmt.Errorf(`failed to add custom validation for "{contains-catalog-label}": %s`, err)
+	}
+
+	err = validate.RegisterTranslation("kebab-case", trans, func(ut ut.Translator) error {
+		return ut.Add("kebab-case", "Key '{0}': {1} does not appear to be in kebab-case", true) // see universal-translator for details
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("kebab-case", fe.Field(), fe.Value().(string))
+		return t
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = validate.RegisterTranslation("contains-catalog-label", trans, func(ut ut.Translator) error {
+		return ut.Add("contains-catalog-label", "Key '{0}': Does not contain the key/value 'supply-chain.apps.tanzu.vmware.com/catalog: tanzu'", true) // see universal-translator for details
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("contains-catalog-label", fe.Field())
+		return t
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return validate, trans, nil
 }
 
 func validate(cmd *cobra.Command, args []string) error {
@@ -178,4 +233,21 @@ func ValidateContainsSemanticVersion(fl validator.FieldLevel) bool {
 	re := regexp.MustCompile(`(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
 	name := fl.Field().String()
 	return re.MatchString(name)
+}
+
+func ValidateContainsCatalogLabel(fl validator.FieldLevel) bool {
+	numberOfEntries := len(fl.Field().MapKeys())
+	if numberOfEntries == 0 {
+		logrus.Errorf("Field '%s' does not contains any values", fl.StructFieldName())
+		return false
+	}
+
+	m := fl.Field().Interface().(map[string]string)
+	v, ok := m["supply-chain.apps.tanzu.vmware.com/catalog"]
+	if !ok {
+		logrus.Errorf("Label 'supply-chain.apps.tanzu.vmware.com/catalog' does not exist")
+		return false
+	}
+
+	return v == "tanzu"
 }
