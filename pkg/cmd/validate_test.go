@@ -50,7 +50,7 @@ metadata:
 apiVersion: supply-chain.apps.tanzu.vmware.com/v1alpha1
 kind: Component
 metadata:
-  name: my-pipeline
+  name: my-pipeline-1.0.0
 spec:
   description: a valid description
   pipelineRun:
