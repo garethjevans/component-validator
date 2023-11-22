@@ -51,16 +51,12 @@ func Parse(source []byte) error {
 		switch u.GetKind() {
 		case "Task":
 			err = multierr.Append(err, ValidateTask(u))
-			break
 		case "Pipeline":
 			err = multierr.Append(err, ValidatePipeline(u))
-			break
 		case "Component":
 			err = multierr.Append(err, ValidateComponent(u))
-			break
 		default:
 			fmt.Println("no validation specified for " + u.GetKind())
-			break
 		}
 	}
 
