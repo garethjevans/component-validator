@@ -195,24 +195,14 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 		return nil, nil, err
 	}
 
-	err = validate.RegisterValidation("kebab-case", ValidateKebabCase)
+	err = multierr.Combine(
+		validate.RegisterValidation("kebab-case", ValidateKebabCase),
+		validate.RegisterValidation("contains-semver", ValidateContainsSemanticVersion),
+		validate.RegisterValidation("contains-catalog-label", ValidateContainsCatalogLabel),
+		validate.RegisterValidation("contains-all", ValidateContainsAll),
+	)
 	if err != nil {
-		return nil, nil, fmt.Errorf(`failed to add custom validation for "{kebab-case}": %s`, err)
-	}
-
-	err = validate.RegisterValidation("contains-semver", ValidateContainsSemanticVersion)
-	if err != nil {
-		return nil, nil, fmt.Errorf(`failed to add custom validation for "{contains-semver}": %s`, err)
-	}
-
-	err = validate.RegisterValidation("contains-catalog-label", ValidateContainsCatalogLabel)
-	if err != nil {
-		return nil, nil, fmt.Errorf(`failed to add custom validation for "{contains-catalog-label}": %s`, err)
-	}
-
-	err = validate.RegisterValidation("contains-all", ValidateContainsAll)
-	if err != nil {
-		return nil, nil, fmt.Errorf(`failed to add custom validation for "{contains-all}": %s`, err)
+		return nil, nil, fmt.Errorf(`failed to add custom validations": %s`, err)
 	}
 
 	err = validate.RegisterTranslation("required", trans, func(ut ut.Translator) error {
