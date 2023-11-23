@@ -44,7 +44,7 @@ metadata:
   name: my-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key: 'APIVersion' Error:Field validation for 'APIVersion' failed on the 'eq' tag",
+			errMessage:  "APIVersion is not equal to tekton.dev/v1",
 		},
 		{
 			name: "valid component",
@@ -79,7 +79,7 @@ spec:
       name: a-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key: 'Metadata.Labels' Error:Field validation for 'Labels' failed on the 'contains-catalog-label' tag",
+			errMessage:  "Key 'Metadata.Labels': Does not contain the key/value 'supply-chain.apps.tanzu.vmware.com/catalog: tanzu'",
 		},
 		{
 			name: "invalid component - name",
@@ -97,7 +97,7 @@ spec:
       name: a-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key: 'Metadata.Name' Error:Field validation for 'Name' failed on the 'kebab-case' tag",
+			errMessage:  "Key 'Metadata.Name': MY_COMPONENT-1.0.0 does not appear to be in kebab-case",
 		},
 		{
 			name: "invalid component - no semver",
@@ -115,7 +115,7 @@ spec:
       name: a-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key: 'Metadata.Name' Error:Field validation for 'Name' failed on the 'contains-semver' tag",
+			errMessage:  "Key 'Metadata.Name': my-component Does not end in a semantic version",
 		},
 	}
 

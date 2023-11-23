@@ -3,11 +3,12 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"regexp"
+
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	entranslations "github.com/go-playground/validator/v10/translations/en"
-	"os"
-	"regexp"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
@@ -67,7 +68,7 @@ func Parse(source []byte) error {
 }
 
 func ValidateTask(u unstructured.Unstructured) error {
-	validate, _, err := getValidator()
+	validate, translator, err := getValidator()
 	if err != nil {
 		return err
 	}
@@ -85,11 +86,11 @@ func ValidateTask(u unstructured.Unstructured) error {
 		return err
 	}
 
-	return validate.Struct(fields)
+	return translate(validate.Struct(fields), translator)
 }
 
 func ValidatePipeline(u unstructured.Unstructured) error {
-	validate, _, err := getValidator()
+	validate, translator, err := getValidator()
 	if err != nil {
 		return err
 	}
@@ -107,7 +108,7 @@ func ValidatePipeline(u unstructured.Unstructured) error {
 		return err
 	}
 
-	return validate.Struct(fields)
+	return translate(validate.Struct(fields), translator)
 }
 
 func ValidateComponent(u unstructured.Unstructured) error {
@@ -146,13 +147,15 @@ func ValidateComponent(u unstructured.Unstructured) error {
 
 func translate(err error, translator ut.Translator) error {
 	if err != nil {
+		var translated error
 
 		errs := err.(validator.ValidationErrors)
 
 		for _, e := range errs {
-			// can translate each error one at a time.
-			fmt.Println(e.Translate(translator))
+			translated = multierr.Append(translated, fmt.Errorf(e.Translate(translator)))
 		}
+
+		return translated
 	}
 	return err
 }
@@ -185,9 +188,19 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 	}
 
 	err = validate.RegisterTranslation("kebab-case", trans, func(ut ut.Translator) error {
-		return ut.Add("kebab-case", "Key '{0}': {1} does not appear to be in kebab-case", true) // see universal-translator for details
+		return ut.Add("kebab-case", "Key '{0}': {1} does not appear to be in kebab-case", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("kebab-case", fe.Field(), fe.Value().(string))
+		t, _ := ut.T("kebab-case", fe.StructNamespace(), fe.Value().(string))
+		return t
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = validate.RegisterTranslation("contains-semver", trans, func(ut ut.Translator) error {
+		return ut.Add("contains-semver", "Key '{0}': {1} Does not end in a semantic version", true)
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("contains-semver", fe.StructNamespace(), fe.Value().(string))
 		return t
 	})
 	if err != nil {
@@ -195,9 +208,9 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 	}
 
 	err = validate.RegisterTranslation("contains-catalog-label", trans, func(ut ut.Translator) error {
-		return ut.Add("contains-catalog-label", "Key '{0}': Does not contain the key/value 'supply-chain.apps.tanzu.vmware.com/catalog: tanzu'", true) // see universal-translator for details
+		return ut.Add("contains-catalog-label", "Key '{0}': Does not contain the key/value 'supply-chain.apps.tanzu.vmware.com/catalog: tanzu'", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("contains-catalog-label", fe.Field())
+		t, _ := ut.T("contains-catalog-label", fe.StructNamespace())
 		return t
 	})
 	if err != nil {
