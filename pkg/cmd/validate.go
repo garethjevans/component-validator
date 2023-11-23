@@ -16,7 +16,6 @@ import (
 	"github.com/stoewer/go-strcase"
 	"go.uber.org/multierr"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -60,122 +59,21 @@ func Parse(source []byte) error {
 		case "Component":
 			err = multierr.Append(err, ValidateComponent(u))
 		default:
-			fmt.Println("no validation specified for " + u.GetKind())
+			logrus.Infof("no validation specified for %s", u.GetKind())
 		}
 	}
 
 	return err
 }
 
-func ValidateTask(u unstructured.Unstructured) error {
-	validate, translator, err := getValidator()
-	if err != nil {
-		return err
-	}
-
-	fields := &struct {
-		APIVersion string `json:"apiVersion" validate:"required,eq=tekton.dev/v1"`
-		Kind       string `json:"kind" validate:"required,eq=Task"`
-		Metadata   struct {
-			Name string `json:"name" validate:"required,kebab-case"`
-		} `json:"metadata" validate:"required"`
-		Spec struct {
-			Params []struct {
-				Name  string `json:"name" validate:"required,kebab-case"`
-				Value string `json:"value"`
-			} `json:"params" validate:"dive"`
-			Results []struct {
-				Name string `json:"name" validate:"required,kebab-case"`
-				Type string `json:"type"`
-			} `json:"results" validate:"dive"`
-			StepTemplate struct {
-				SecurityContext struct {
-					AllowPrivilegeEscalation bool `json:"allowPrivilegeEscalation" validate:"eq=false"`
-					Capabilities             struct {
-						Drop []string `json:"drop" validate:"contains-all"`
-					} `json:"capabilities" validate:"required"`
-					RunAsNonRoot   bool `json:"runAsNonRoot" validate:"required,eq=true"`
-					RunAsUser      int  `json:"runAsUser" validate:"required,ne=0"`
-					SeccompProfile struct {
-						Type string `json:"type" validate:"required,eq=RuntimeDefault"`
-					} `json:"seccompProfile" validate:"required"`
-				} `json:"securityContext" validate:"required"`
-			} `json:"stepTemplate" validate:"required"`
-		} `json:"spec" validate:"required"`
-	}{}
-
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
-	if err != nil {
-		return err
-	}
-
-	return translate(validate.Struct(fields), translator)
-}
-
-func ValidatePipeline(u unstructured.Unstructured) error {
-	validate, translator, err := getValidator()
-	if err != nil {
-		return err
-	}
-
-	fields := &struct {
-		APIVersion string `json:"apiVersion" validate:"required,eq=tekton.dev/v1"`
-		Kind       string `json:"kind" validate:"required,eq=Pipeline"`
-		Metadata   struct {
-			Name string `json:"name" validate:"required,kebab-case"`
-		} `json:"metadata"`
-	}{}
-
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
-	if err != nil {
-		return err
-	}
-
-	return translate(validate.Struct(fields), translator)
-}
-
-func ValidateComponent(u unstructured.Unstructured) error {
-	validate, translator, err := getValidator()
-	if err != nil {
-		return err
-	}
-
-	fields := &struct {
-		APIVersion string `json:"apiVersion" validate:"required,eq=supply-chain.apps.tanzu.vmware.com/v1alpha1"`
-		Kind       string `json:"kind" validate:"required,eq=Component"`
-		Metadata   struct {
-			Name   string            `json:"name" validate:"required,kebab-case,contains-semver"`
-			Labels map[string]string `json:"labels" validate:"contains-catalog-label"`
-		} `json:"metadata"`
-		Spec struct {
-			Description string `json:"description" validate:"required"`
-			PipelineRun struct {
-				Params []struct {
-					Name string `json:"name" validate:"required,kebab-case"`
-				}
-				PipelineRef struct {
-					Name string `json:"name" validate:"required,kebab-case"`
-				} `json:"pipelineRef" validate:"required"`
-			} `json:"pipelineRun" validate:"required"`
-		} `json:"spec" validate:"required"`
-	}{}
-
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
-	if err != nil {
-		return err
-	}
-
-	return translate(validate.Struct(fields), translator)
-}
-
-func translate(err error, translator ut.Translator) error {
+func translate(kind string, name string, err error, translator ut.Translator) error {
 	if err != nil {
 		var translated error
 
 		errs := err.(validator.ValidationErrors)
 
 		for _, e := range errs {
-			translated = multierr.Append(translated, fmt.Errorf(e.Translate(translator)))
+			translated = multierr.Append(translated, fmt.Errorf("%s/%s %s", kind, name, e.Translate(translator)))
 		}
 
 		return translated
@@ -282,7 +180,11 @@ func validate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return err
+	if err != nil {
+		return fmt.Errorf("finished with errors")
+	}
+
+	return nil
 }
 
 func ValidateKebabCase(fl validator.FieldLevel) bool {

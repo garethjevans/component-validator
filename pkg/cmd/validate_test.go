@@ -69,7 +69,7 @@ spec:
         type: RuntimeDefault
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Spec.StepTemplate.SecurityContext.RunAsNonRoot': is required; Key 'Spec.StepTemplate.SecurityContext.RunAsUser': is required",
+			errMessage:  "Task/my-pipeline Key 'Spec.StepTemplate.SecurityContext.RunAsNonRoot': is required; Task/my-pipeline Key 'Spec.StepTemplate.SecurityContext.RunAsUser': is required",
 		},
 		{
 			name: "v1 task - invalid capabilities",
@@ -93,7 +93,7 @@ spec:
         type: RuntimeDefault
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Spec.StepTemplate.SecurityContext.Capabilities.Drop': Must only contain the values [ALL]",
+			errMessage:  "Task/my-pipeline Key 'Spec.StepTemplate.SecurityContext.Capabilities.Drop': Must only contain the values [ALL]",
 		},
 		{
 			name: "v1 task - invalid seccomp profile",
@@ -117,7 +117,7 @@ spec:
         type: Localhost
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Spec.StepTemplate.SecurityContext.SeccompProfile.Type': Expected Localhost to equal RuntimeDefault",
+			errMessage:  "Task/my-pipeline Key 'Spec.StepTemplate.SecurityContext.SeccompProfile.Type': Expected Localhost to equal RuntimeDefault",
 		},
 		{
 			name: "v1 task - missing spec",
@@ -128,7 +128,7 @@ metadata:
   name: my-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Spec': is required",
+			errMessage:  "Task/my-pipeline Key 'Spec': is required",
 		},
 		{
 			name: "v1 task - missing step template",
@@ -141,7 +141,7 @@ spec:
   params: []
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Spec.StepTemplate': is required",
+			errMessage:  "Task/my-pipeline Key 'Spec.StepTemplate': is required",
 		},
 		{
 			name: "v1beta1 pipelines and tasks",
@@ -157,7 +157,7 @@ metadata:
   name: my-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key 'APIVersion': Expected tekton.dev/v1beta1 to equal tekton.dev/v1; Key 'Spec': is required",
+			errMessage:  "Task/my-pipeline Key 'APIVersion': Expected tekton.dev/v1beta1 to equal tekton.dev/v1; Task/my-pipeline Key 'Spec': is required",
 		},
 		{
 			name: "valid component",
@@ -192,7 +192,7 @@ spec:
       name: a-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Metadata.Labels': Does not contain the key/value 'supply-chain.apps.tanzu.vmware.com/catalog: tanzu'",
+			errMessage:  "Component/my-pipeline-1.0.0 Key 'Metadata.Labels': Does not contain the key/value 'supply-chain.apps.tanzu.vmware.com/catalog: tanzu'",
 		},
 		{
 			name: "invalid component - name",
@@ -210,7 +210,7 @@ spec:
       name: a-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Metadata.Name': MY_COMPONENT-1.0.0 does not appear to be in kebab-case",
+			errMessage:  "Component/MY_COMPONENT-1.0.0 Key 'Metadata.Name': MY_COMPONENT-1.0.0 does not appear to be in kebab-case",
 		},
 		{
 			name: "invalid component - no semver",
@@ -228,7 +228,7 @@ spec:
       name: a-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "Key 'Metadata.Name': my-component Does not end in a semantic version",
+			errMessage:  "Component/my-component Key 'Metadata.Name': my-component Does not end in a semantic version",
 		},
 	}
 
