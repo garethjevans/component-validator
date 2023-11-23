@@ -1,0 +1,28 @@
+package cmd
+
+import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+func ValidatePipeline(u unstructured.Unstructured) error {
+	validate, translator, err := getValidator()
+	if err != nil {
+		return err
+	}
+
+	fields := &struct {
+		APIVersion string `json:"apiVersion" validate:"required,eq=tekton.dev/v1"`
+		Kind       string `json:"kind" validate:"required,eq=Pipeline"`
+		Metadata   struct {
+			Name string `json:"name" validate:"required,kebab-case"`
+		} `json:"metadata"`
+	}{}
+
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
+	if err != nil {
+		return err
+	}
+
+	return translate(fields.Kind, fields.Metadata.Name, validate.Struct(fields), translator)
+}
