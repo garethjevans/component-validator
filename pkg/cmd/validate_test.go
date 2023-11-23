@@ -16,19 +16,132 @@ func TestParse(t *testing.T) {
 		errMessage  string
 	}{
 		{
-			name: "v1 pipelines and tasks",
+			name: "v1 pipeline",
 			doc: `---
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: my-pipeline
----
+`,
+			expectedErr: false,
+		},
+		{
+			name: "v1 task",
+			doc: `
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: my-pipeline
+spec:
+  params: []
+  results: []
+  stepTemplate:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsNonRoot: true
+      runAsUser: 1001
+      seccompProfile:
+        type: RuntimeDefault
+`,
+			expectedErr: false,
+		},
+		{
+			name: "v1 task - run as root",
+			doc: `
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: my-pipeline
+spec:
+  params: []
+  results: []
+  stepTemplate:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault
+`,
+			expectedErr: true,
+			errMessage:  "Key 'Spec.StepTemplate.SecurityContext.RunAsNonRoot': is required; Key 'Spec.StepTemplate.SecurityContext.RunAsUser': is required",
+		},
+		{
+			name: "v1 task - invalid capabilities",
+			doc: `
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: my-pipeline
+spec:
+  params: []
+  results: []
+  stepTemplate:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - all
+      runAsNonRoot: true
+      runAsUser: 1001
+      seccompProfile:
+        type: RuntimeDefault
+`,
+			expectedErr: true,
+			errMessage:  "Key 'Spec.StepTemplate.SecurityContext.Capabilities.Drop': Must only contain the values [ALL]",
+		},
+		{
+			name: "v1 task - invalid seccomp profile",
+			doc: `
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: my-pipeline
+spec:
+  params: []
+  results: []
+  stepTemplate:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsNonRoot: true
+      runAsUser: 1001
+      seccompProfile:
+        type: Localhost
+`,
+			expectedErr: true,
+			errMessage:  "Key 'Spec.StepTemplate.SecurityContext.SeccompProfile.Type': Expected Localhost to equal RuntimeDefault",
+		},
+		{
+			name: "v1 task - missing spec",
+			doc: `
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
   name: my-pipeline
 `,
-			expectedErr: false,
+			expectedErr: true,
+			errMessage:  "Key 'Spec': is required",
+		},
+		{
+			name: "v1 task - missing step template",
+			doc: `
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: my-pipeline
+spec:
+  params: []
+`,
+			expectedErr: true,
+			errMessage:  "Key 'Spec.StepTemplate': is required",
 		},
 		{
 			name: "v1beta1 pipelines and tasks",
@@ -44,7 +157,7 @@ metadata:
   name: my-pipeline
 `,
 			expectedErr: true,
-			errMessage:  "APIVersion is not equal to tekton.dev/v1",
+			errMessage:  "Key 'APIVersion': Expected tekton.dev/v1beta1 to equal tekton.dev/v1; Key 'Spec': is required",
 		},
 		{
 			name: "valid component",

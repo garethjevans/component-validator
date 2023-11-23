@@ -78,7 +78,30 @@ func ValidateTask(u unstructured.Unstructured) error {
 		Kind       string `json:"kind" validate:"required,eq=Task"`
 		Metadata   struct {
 			Name string `json:"name" validate:"required,kebab-case"`
-		} `json:"metadata"`
+		} `json:"metadata" validate:"required"`
+		Spec struct {
+			Params []struct {
+				Name  string `json:"name" validate:"required,kebab-case"`
+				Value string `json:"value"`
+			} `json:"params" validate:"dive"`
+			Results []struct {
+				Name string `json:"name" validate:"required,kebab-case"`
+				Type string `json:"type"`
+			} `json:"results" validate:"dive"`
+			StepTemplate struct {
+				SecurityContext struct {
+					AllowPrivilegeEscalation bool `json:"allowPrivilegeEscalation" validate:"eq=false"`
+					Capabilities             struct {
+						Drop []string `json:"drop" validate:"contains-all"`
+					} `json:"capabilities" validate:"required"`
+					RunAsNonRoot   bool `json:"runAsNonRoot" validate:"required,eq=true"`
+					RunAsUser      int  `json:"runAsUser" validate:"required,ne=0"`
+					SeccompProfile struct {
+						Type string `json:"type" validate:"required,eq=RuntimeDefault"`
+					} `json:"seccompProfile" validate:"required"`
+				} `json:"securityContext" validate:"required"`
+			} `json:"stepTemplate" validate:"required"`
+		} `json:"spec" validate:"required"`
 	}{}
 
 	err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &fields)
@@ -187,6 +210,31 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 		return nil, nil, fmt.Errorf(`failed to add custom validation for "{contains-catalog-label}": %s`, err)
 	}
 
+	err = validate.RegisterValidation("contains-all", ValidateContainsAll)
+	if err != nil {
+		return nil, nil, fmt.Errorf(`failed to add custom validation for "{contains-all}": %s`, err)
+	}
+
+	err = validate.RegisterTranslation("required", trans, func(ut ut.Translator) error {
+		return ut.Add("required", "Key '{0}': is required", true)
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("required", fe.StructNamespace())
+		return t
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = validate.RegisterTranslation("eq", trans, func(ut ut.Translator) error {
+		return ut.Add("eq", "Key '{0}': Expected {1} to equal {2}", true)
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("eq", fe.StructNamespace(), fe.Value().(string), fe.Param())
+		return t
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
 	err = validate.RegisterTranslation("kebab-case", trans, func(ut ut.Translator) error {
 		return ut.Add("kebab-case", "Key '{0}': {1} does not appear to be in kebab-case", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
@@ -211,6 +259,16 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 		return ut.Add("contains-catalog-label", "Key '{0}': Does not contain the key/value 'supply-chain.apps.tanzu.vmware.com/catalog: tanzu'", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
 		t, _ := ut.T("contains-catalog-label", fe.StructNamespace())
+		return t
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = validate.RegisterTranslation("contains-all", trans, func(ut ut.Translator) error {
+		return ut.Add("contains-all", "Key '{0}': Must only contain the values [ALL]", true)
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("contains-all", fe.StructNamespace())
 		return t
 	})
 	if err != nil {
@@ -251,16 +309,19 @@ func ValidateContainsSemanticVersion(fl validator.FieldLevel) bool {
 func ValidateContainsCatalogLabel(fl validator.FieldLevel) bool {
 	numberOfEntries := len(fl.Field().MapKeys())
 	if numberOfEntries == 0 {
-		logrus.Errorf("Field '%s' does not contains any values", fl.StructFieldName())
 		return false
 	}
 
 	m := fl.Field().Interface().(map[string]string)
 	v, ok := m["supply-chain.apps.tanzu.vmware.com/catalog"]
 	if !ok {
-		logrus.Errorf("Label 'supply-chain.apps.tanzu.vmware.com/catalog' does not exist")
 		return false
 	}
 
 	return v == "tanzu"
+}
+
+func ValidateContainsAll(fl validator.FieldLevel) bool {
+	m := fl.Field().Interface().([]string)
+	return len(m) == 1 && m[0] == "ALL"
 }
