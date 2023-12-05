@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
@@ -98,6 +99,7 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 		validate.RegisterValidation("contains-semver", ValidateContainsSemanticVersion),
 		validate.RegisterValidation("contains-catalog-label", ValidateContainsCatalogLabel),
 		validate.RegisterValidation("contains-all", ValidateContainsAll),
+		validate.RegisterValidation("not-contains-component", ValidateNotContainsComponent),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf(`failed to add custom validations": %s`, err)
@@ -162,6 +164,17 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
+	err = validate.RegisterTranslation("not-contains-component", trans, func(ut ut.Translator) error {
+		return ut.Add("not-contains-component", "Key '{0}': Must not contain 'component'", true)
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("not-contains-component", fe.StructNamespace())
+		return t
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return validate, trans, nil
 }
 
@@ -216,4 +229,9 @@ func ValidateContainsCatalogLabel(fl validator.FieldLevel) bool {
 func ValidateContainsAll(fl validator.FieldLevel) bool {
 	m := fl.Field().Interface().([]string)
 	return len(m) == 1 && m[0] == "ALL"
+}
+
+func ValidateNotContainsComponent(fl validator.FieldLevel) bool {
+	name := fl.Field().String()
+	return !strings.Contains(name, "-component")
 }

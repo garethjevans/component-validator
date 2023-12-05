@@ -15,7 +15,7 @@ func ValidateComponent(u unstructured.Unstructured) error {
 		APIVersion string `json:"apiVersion" validate:"required,eq=supply-chain.apps.tanzu.vmware.com/v1alpha1"`
 		Kind       string `json:"kind" validate:"required,eq=Component"`
 		Metadata   struct {
-			Name   string            `json:"name" validate:"required,kebab-case,contains-semver"`
+			Name   string            `json:"name" validate:"required,kebab-case,contains-semver,not-contains-component"`
 			Labels map[string]string `json:"labels" validate:"contains-catalog-label"`
 		} `json:"metadata"`
 		Spec struct {
