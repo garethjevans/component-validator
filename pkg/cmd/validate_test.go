@@ -62,14 +62,61 @@ spec:
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
+        drop: []
+      runAsUser: 0
+      runAsNonRoot: false
+      seccompProfile:
+        type: RuntimeDefault
+`,
+			expectedErr: false,
+		},
+		{
+			name: "v1 task - run as root with non root user",
+			doc: `
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: my-pipeline
+spec:
+  params: []
+  results: []
+  stepTemplate:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
         drop:
         - ALL
+      runAsNonRoot: false
+      runAsUser: 1001
+      seccompProfile:
+        type: RuntimeDefault
+`,
+			expectedErr: true,
+			errMessage:  "Task/my-pipeline Key: 'Spec.StepTemplate.SecurityContext.RunAsNonRoot' Error:Field validation for 'RunAsNonRoot' failed on the 'compatible-nonroot' tag",
+		},
+		{
+			name: "v1 task - run as non root with root user",
+			doc: `
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: my-pipeline
+spec:
+  params: []
+  results: []
+  stepTemplate:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsNonRoot: true
       runAsUser: 0
       seccompProfile:
         type: RuntimeDefault
 `,
 			expectedErr: true,
-			errMessage:  "Task/my-pipeline Key 'Spec.StepTemplate.SecurityContext.RunAsNonRoot': is required; Task/my-pipeline Key 'Spec.StepTemplate.SecurityContext.RunAsUser': is required",
+			errMessage:  "Task/my-pipeline Key: 'Spec.StepTemplate.SecurityContext.RunAsNonRoot' Error:Field validation for 'RunAsNonRoot' failed on the 'compatible-nonroot' tag",
 		},
 		{
 			name: "v1 task - invalid capabilities",
