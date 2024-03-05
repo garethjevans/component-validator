@@ -240,14 +240,14 @@ func ValidateContainsAll(fl validator.FieldLevel) bool {
 	sc := reflect.Indirect(top).FieldByName("Spec").FieldByName("StepTemplate").FieldByName("SecurityContext")
 	runAsUser := sc.FieldByName("RunAsUser").Int()
 
-	is_valid := true
+	isValid := true
 	m := fl.Field().Interface().([]string)
 
 	if runAsUser != 0 {
-		is_valid = len(m) == 1 && m[0] == "ALL"
+		isValid = len(m) == 1 && m[0] == "ALL"
 	}
 
-	return is_valid
+	return isValid
 }
 
 func ValidateNotContainsComponent(fl validator.FieldLevel) bool {
@@ -263,13 +263,13 @@ func ValidateNonRoot(fl validator.FieldLevel) bool {
 	runAsUser := sc.FieldByName("RunAsUser").Int()
 	nonRoot := fl.Field().Bool()
 
-	if runAsUser == 0 && nonRoot == false {
+	if runAsUser == 0 && !nonRoot {
 		return true
-	} else if runAsUser != 0 && nonRoot == true {
+	} else if runAsUser != 0 && nonRoot {
 		return true
-	} else if runAsUser == 0 && nonRoot == false {
+	} else if runAsUser == 0 && nonRoot {
 		return false
-	} else if runAsUser != 0 && nonRoot == false {
+	} else if runAsUser != 0 && !nonRoot {
 		return false
 	}
 
