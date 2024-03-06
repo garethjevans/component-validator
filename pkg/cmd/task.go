@@ -32,7 +32,7 @@ func ValidateTask(u unstructured.Unstructured) error {
 					Capabilities             struct {
 						Drop []string `json:"drop" validate:"contains-all"`
 					} `json:"capabilities" validate:"required"`
-					RunAsNonRoot   bool `json:"runAsNonRoot" validate:"required,eq=true"`
+					RunAsNonRoot   bool `json:"runAsNonRoot" validate:"compatible-nonroot"`
 					RunAsUser      int  `json:"runAsUser" validate:"required,ne=0"`
 					SeccompProfile struct {
 						Type string `json:"type" validate:"required,eq=RuntimeDefault"`

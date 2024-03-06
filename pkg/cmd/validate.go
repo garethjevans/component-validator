@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -74,7 +75,13 @@ func translate(kind string, name string, err error, translator ut.Translator) er
 		errs := err.(validator.ValidationErrors)
 
 		for _, e := range errs {
-			translated = multierr.Append(translated, fmt.Errorf("%s/%s %s", kind, name, e.Translate(translator)))
+			formattedError := fmt.Errorf("%s/%s %s", kind, name, e.Translate(translator))
+
+			if strings.Contains(formattedError.Error(), ".RunAsUser': is required") {
+				logrus.Warnf("Please ensure you meant to run as root! %s", formattedError)
+			} else {
+				translated = multierr.Append(translated, fmt.Errorf("%s/%s %s", kind, name, e.Translate(translator)))
+			}
 		}
 
 		return translated
@@ -100,6 +107,7 @@ func getValidator() (*validator.Validate, ut.Translator, error) {
 		validate.RegisterValidation("contains-catalog-label", ValidateContainsCatalogLabel),
 		validate.RegisterValidation("contains-all", ValidateContainsAll),
 		validate.RegisterValidation("not-contains-component", ValidateNotContainsComponent),
+		validate.RegisterValidation("compatible-nonroot", ValidateNonRoot),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf(`failed to add custom validations": %s`, err)
@@ -227,11 +235,43 @@ func ValidateContainsCatalogLabel(fl validator.FieldLevel) bool {
 }
 
 func ValidateContainsAll(fl validator.FieldLevel) bool {
+	top := fl.Top()
+
+	sc := reflect.Indirect(top).FieldByName("Spec").FieldByName("StepTemplate").FieldByName("SecurityContext")
+	runAsUser := sc.FieldByName("RunAsUser").Int()
+
+	isValid := true
 	m := fl.Field().Interface().([]string)
-	return len(m) == 1 && m[0] == "ALL"
+
+	if runAsUser != 0 {
+		isValid = len(m) == 1 && m[0] == "ALL"
+	}
+
+	return isValid
 }
 
 func ValidateNotContainsComponent(fl validator.FieldLevel) bool {
 	name := fl.Field().String()
 	return !strings.Contains(name, "-component")
+}
+
+func ValidateNonRoot(fl validator.FieldLevel) bool {
+	top := fl.Top()
+
+	sc := reflect.Indirect(top).FieldByName("Spec").FieldByName("StepTemplate").FieldByName("SecurityContext")
+
+	runAsUser := sc.FieldByName("RunAsUser").Int()
+	nonRoot := fl.Field().Bool()
+
+	if runAsUser == 0 && !nonRoot {
+		return true
+	} else if runAsUser != 0 && nonRoot {
+		return true
+	} else if runAsUser == 0 && nonRoot {
+		return false
+	} else if runAsUser != 0 && !nonRoot {
+		return false
+	}
+
+	return false
 }
